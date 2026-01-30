@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glycine Double-Effect TVR Plate Evaporator Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .canvas-container {
+            position: relative;
+            background: #fff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        .legend {
+            margin-top: 15px;
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #555;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            padding: 5px 10px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 5px;
+        }
+        /* Dot style from original design */
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .note {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+            background: #eef;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Glycine Double-Effect TVR Plate Evaporator System</h1>
+    <div class="canvas-container">
+        <canvas id="simCanvas" width="1000" height="600"></canvas>
+    </div>
+    
+    <!-- Legend (English) -->
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background:#87CEEB"></div>Feed / Dilute Liquid</div>
+        <div class="legend-item"><div class="dot" style="background:#4682B4"></div>Concentrate</div>
+        <div class="legend-item"><div class="dot" style="background:#FF6347"></div>Live Steam / Mixed Steam</div>
+        <div class="legend-item"><div class="dot" style="background:#D3D3D3"></div>Secondary Vapor</div>
+        <div class="legend-item"><div class="dot" style="background:#FFD700"></div>Condensate</div>
+    </div>
+    
+    <div class="note">
+        <strong>Note:</strong> To display real equipment photos, please name your photos as 
+        <code>heater.png</code> (Heater), 
+        <code>separator.png</code> (Separator), 
+        <code>condenser.png</code> (Condenser), 
+        <code>tvr.png</code> (TVR), 
+        <code>tank.png</code> (Tank), 
+        <code>pump.png</code> (Pump) 
+        and place them in the same directory as this file.
+    </div>
+
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    let time = 0;
+
+    // --- 1. Image Resource Loading ---
+    const images = {
+        heater: new Image(),
+        separator: new Image(),
+        condenser: new Image(),
+        tvr: new Image(),
+        tank: new Image(),
+        pump: new Image()
+    };
+
+    // Initialize images: try local file, fallback to placeholder
+    function initImage(key, filename, labelText, width=100, height=100) {
+        const img = images[key];
+        img.onerror = function() {
+            img.src = `https://placehold.co/${width}x${height}/e0e0e0/333333?text=${labelText}`;
+            img.onerror = null;
+        };
+        img.src = filename;
+    }
+
+    // Configure equipment images (English placeholders)
+    initImage('heater',    'heater.png',    'Heater', 60, 150);
+    initImage('separator', 'separator.png', 'Separator', 80, 160);
+    initImage('condenser', 'condenser.png', 'Condenser', 60, 100);
+    initImage('tvr',       'tvr.png',       'TVR',    80, 80);
+    initImage('tank',      'tank.png',      'Tank',   50, 60);
+    initImage('pump',      'pump.png',      'Pump',     40, 40);
+
+
+    // --- 2. Color Config ---
+    const colors = {
+        feed: '#87CEEB', conc1: '#5F9EA0', conc2: '#4682B4',
+        steam: '#FF6347', vapor: '#D3D3D3', condensate: '#FFD700',
+        cw: '#00CED1', text: '#333'
+    };
+
+    // --- 3. Drawing Helper Functions ---
+
+    function drawHeater(img, x, y, w, h, label) {
+        ctx.drawImage(img, x, y, w, h);
+        ctx.fillStyle = colors.text;
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h + 15);
+    }
+
+    function drawSeparator(img, centerX, centerY, label) {
+        const w = 80;  
+        const h = 160; 
+        const x = centerX - w/2;
+        const y = centerY - h/2;
+        ctx.drawImage(img, x, y, w, h);
+        ctx.fillStyle = colors.text;
+        ctx.textAlign = 'center';
+        ctx.fillText(label, centerX, y + h + 15);
+    }
+
+    function drawTank(img, centerX, centerY, label) {
+        const w = 50;
+        const h = 60;
+        ctx.drawImage(img, centerX - w/2, centerY - h/2, w, h);
+        ctx.fillStyle = colors.text;
+        ctx.textAlign = 'center';
+        ctx.fillText(label, centerX, centerY + h/2 + 15);
+    }
+
+    function drawPump(img, centerX, centerY) {
+        const size = 30;
+        ctx.drawImage(img, centerX - size/2, centerY - size/2, size, size);
+    }
+
+    function drawTVR(img, centerX, centerY) {
+        const w = 80;
+        const h = 80;
+        ctx.drawImage(img, centerX - w/2, centerY - h/2, w, h);
+        ctx.fillStyle = colors.text;
+        ctx.textAlign = 'center';
+        ctx.fillText("TVR", centerX, centerY - h/2 - 10);
+    }
+
+    function drawPipe(points, color, width=2, dash=true) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineJoin = 'round';
+        if (dash) {
+            ctx.setLineDash([8, 4]);
+            ctx.lineDashOffset = -time * 1;
+        } else {
+            ctx.setLineDash([]);
+        }
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // --- 4. Main Animation Loop ---
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        time += 1;
+
+        // === Layer 1: Piping ===
+        
+        // Feed loop
+        drawPipe([{x:80, y:420}, {x:80, y:450}, {x:200, y:450}, {x:200, y:350}, {x:320, y:350}], colors.feed);
+        // 1st Effect Transfer (Bottom feed style)
+        // Path: S1 Bottom(450,330) -> Pump In(450,400) -> Pump Out(550,400) -> Lift(550,350) -> E2 Bottom(620,350)
+        drawPipe([{x:450, y:330}, {x:450, y:400}, {x:550, y:400}, {x:550, y:350}, {x:620, y:350}], colors.conc1);
+
+        // 2nd Effect Discharge
+        drawPipe([{x:750, y:330}, {x:750, y:480}, {x:850, y:480}], colors.conc2);
+
+        // Steam Loop (Live Steam -> TVR)
+        drawPipe([{x:350, y:20}, {x:350, y:60}], colors.steam, 4);
+        // TVR -> E1 Shell
+        drawPipe([{x:350, y:140}, {x:350, y:200}], colors.steam, 4);
+        
+        // Secondary Vapor
+        drawPipe([{x:450, y:190}, {x:450, y:100}, {x:390, y:100}], colors.vapor); // To TVR
+        drawPipe([{x:450, y:190}, {x:500, y:190}, {x:500, y:150}, {x:650, y:150}, {x:650, y:200}], colors.vapor); // To E2
+        drawPipe([{x:750, y:190}, {x:750, y:100}, {x:880, y:100}, {x:880, y:120}], colors.vapor); // To Cond
+
+        // Condensate Loop
+        drawPipe([{x:350, y:350}, {x:350, y:520}, {x:400, y:520}], colors.condensate);
+        drawPipe([{x:650, y:350}, {x:650, y:520}, {x:400, y:520}], colors.condensate);
+        drawPipe([{x:400, y:520}, {x:240, y:520}, {x:240, y:480}], colors.condensate); // To Preheater
+        drawPipe([{x:240, y:420}, {x:240, y:380}, {x:100, y:380}], colors.condensate); // Preheater Out
+
+        // Cooling Water
+        drawPipe([{x:920, y:250}, {x:920, y:200}], colors.cw);
+        drawPipe([{x:920, y:120}, {x:920, y:80}], colors.cw);
+
+        // Vacuum Pipe
+        drawPipe([{x:900, y:250}, {x:950, y:250}, {x:950, y:330}], '#aaa', 1);
+
+        // --- Gas-Liquid Mix Lines (Heater -> Separator) ---
+        drawPipe([{x:380, y:240}, {x:410, y:240}], colors.conc1, 4, false); // E1 -> S1
+        drawPipe([{x:680, y:240}, {x:710, y:240}], colors.conc2, 4, false); // E2 -> S2
+
+
+        // === Layer 2: Equipment Images ===
+        
+        drawHeater(images.heater, 320, 200, 60, 150, "E-101 1st Effect");
+        drawHeater(images.heater, 620, 200, 60, 150, "E-102 2nd Effect");
+        drawHeater(images.heater, 200, 420, 40, 60, "E-103 Preheater");
+        drawHeater(images.condenser, 850, 120, 70, 110, "Condenser");
+
+        drawSeparator(images.separator, 450, 250, "S-101");
+        drawSeparator(images.separator, 750, 250, "S-102");
+
+        drawTank(images.tank, 80, 450, "Feed Tank");
+        drawTank(images.tank, 400, 520, "Condensate Tank");
+
+        drawTVR(images.tvr, 350, 100);
+        
+        drawPump(images.pump, 140, 450); 
+        drawPump(images.pump, 500, 400); 
+        drawPump(images.pump, 750, 480); 
+        drawPump(images.pump, 950, 350); 
+
+        // === Layer 3: Text Parameters ===
+        ctx.fillStyle = '#d32f2f'; 
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'center';
+        
+        ctx.fillText("0.5MPa Live Steam", 350, 15);
+        ctx.fillText("Flow: ~2,400 kg/h", 350, 30);
+        ctx.fillText("Mixed Steam 80℃", 280, 170);
+
+        // --- 1st/2nd Effect Params (Orange) ---
+        ctx.fillStyle = '#FF8C00'; 
+        
+        // 1st Effect
+        ctx.fillText("1st Effect Evap 70℃", 450, 240);
+        ctx.fillText("Evap: 3,900 kg/h", 450, 255);
+        ctx.fillText("-0.069 MPa", 450, 270);
+        
+        // 2nd Effect
+        ctx.fillText("2nd Effect Evap 50℃", 750, 240);
+        ctx.fillText("Evap: 2,100 kg/h", 750, 255);
+        ctx.fillText("-0.088 MPa", 750, 270);
+        
+        // Other params (Blue/Green/Gold/Gray)
+        ctx.fillStyle = '#1976d2'; 
+        ctx.fillText("Prod Conc ~40%", 850, 480);
+        ctx.fillText("Flow: ~8,590 kg/h", 850, 495);
+
+        ctx.fillStyle = '#00796b';
+        ctx.fillText("Feed 23.55%", 80, 410);
+        ctx.fillText("Flow: ~14,590 kg/h", 80, 425);
+
+        ctx.fillStyle = '#00CED1';
+        ctx.fillText("CW: ~200 m³/h", 930, 225);
+
+        ctx.fillStyle = '#CFB53B';
+        ctx.fillText("Mixed Condensate", 400, 565);
+        ctx.fillText("~6,300 kg/h", 400, 580);
+        
+        ctx.fillStyle = '#888'; 
+        ctx.fillText("End Condensate", 930, 245);
+        ctx.fillText("~2,100 kg/h", 930, 260);
+
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+
+</script>
+
+</body>
+</html>
